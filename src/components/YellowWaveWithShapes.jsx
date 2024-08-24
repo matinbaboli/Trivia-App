@@ -13,7 +13,6 @@ const Shape = styled.img`
     right: ${props => props.breakpoint600 ? props.right: props.right - 40}px; 
     
 `
-// do calculation for right property when windowWidth is smaller than 600
 const YellowWaveWithShapes = ({breakpoint900, breakpoint600}) => {
     return (
         <>

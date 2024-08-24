@@ -35,24 +35,26 @@ const ResultsContainer = styled.div`
     }
 `
 
-const Results = ({breakpoint600}) => {
+const Results = ({breakpoint600, stats}) => {
+    const {overallCorrects, overallWrongs, correctsInRow, mostCorrectsInRow} = stats
+
     return (
         <ResultsContainer breakpoint600={breakpoint600}>
             <div>
                 <CorrectIcon/>
-                <p>4</p>
+                <p>{overallCorrects}</p>
             </div>
             <div>
                 <WrongIcon/>
-                <p>4</p>
+                <p>{overallWrongs}</p>
             </div>
             <div>
                 <CorrectsInARowIcon/>
-                <p>4</p>
+                <p>{correctsInRow}</p>
             </div>
             <div>
                 <MostCorrectsInARowIcon/>
-                <p>4</p>
+                <p>{mostCorrectsInRow}</p>
             </div>
         </ResultsContainer>
     )

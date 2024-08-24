@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react"
+import React, {useEffect, useState, useRef} from "react"
 import axios from "axios"
 import {createGlobalStyle} from "styled-components"
 import Button from "./components/Button"
@@ -48,9 +48,8 @@ const AppStyle = createGlobalStyle`
             font-family: "Gudea", sans-serif;
             font-weight: 400;
             font-size: 1.2rem;
-            width: 90%;
+            width: auto;
             margin-top: 50px;
-            margin-bottom: 30px;
         }
     }
 
@@ -78,6 +77,13 @@ const AppStyle = createGlobalStyle`
         display: flex;
         flex-direction: column;
         align-items: center;
+
+        & p {
+            width: 90%;
+            margin-top: 0px;
+            margin-bottom: 30px;
+        }
+
     }
 
     .text-highlight {
@@ -136,7 +142,7 @@ const AppStyle = createGlobalStyle`
             width: 80%;
         }
 
-        .question-container {
+        .wrong-answer-advice-container {
             & p {
                 width: 480px;
             }
@@ -185,53 +191,63 @@ const AppStyle = createGlobalStyle`
 
 `
 
+let initialQuestion = {
+    correct_answer: "correct",
+    incorrect_answers: ["incorrect1", "incorrect2", "incorrect3"], 
+    question: "What is the question?"   
+}
+
 const App = () => {
     const [windowWidth, setWindowWidth] = useState(window.innerWidth)
-    const [questions, setQuestions] = useState([{
-        correct_answer: "correct",
-        incorrect_answers: ["incorrect1", "incorrect2", "incorrect3"], 
-        question: "What is the question?"   
-    }])
+    const [isLoading, setIsLoading] = useState(false)
+    const [questions, setQuestions] = useState([initialQuestion])
+    const [shuffledAnswers, setShuffledAnswers] = useState([])
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
     const [answerWasWrong, setAnswerWasWrong] = useState(false)
+    const [stats, setStats] = useState({
+        overallCorrects: 0,
+        overallWrongs: 0,
+        correctsInRow: 0,
+        mostCorrectsInRow: 0,
+    })
 
+    const answerButtonsContainer = useRef()
 
     const breakpoint900 = windowWidth > 900
     const breakpoint600 = windowWidth > 600
 
     
-    const {correct_answer, incorrect_answers, question} = questions[currentQuestionIndex]
-    
-    const answers = []
-    
+    const {correct_answer, incorrect_answers, question} = questions[currentQuestionIndex] || initialQuestion
+
+    let answers = []
     answers.push(correct_answer)
     incorrect_answers.forEach(item => {
         answers.push(item)
-    })
+    })    
 
-    function shuffle(array) {
-        for(let i = array.length - 1; i > 0; i--) {
-            let j = Math.floor(Math.random() * (i + 1)) //random index from 0 to i
-            // swap elements array[i] and array[j]
-            let t = array[i];
-            array[i] = array[j]; 
-            array[j] = t
-        }
-    }
-    shuffle(answers)
 
+    // this function decodes the html entities sent in the text from the api
     function decodeHtml(html) {
         let txt = document.createElement("textarea")
         txt.innerHTML = html
         return txt.value
     }
-
+    
+    
     function handleUserAnswer(e) {
         const clickedButton = e.currentTarget 
         const allAnswersList = Array.from(clickedButton.parentElement.childNodes)
         
-        if (clickedButton.innerText === correct_answer) {
+        if (clickedButton.value === decodeHtml(correct_answer)) {
             clickedButton.classList.add("correct")
+            setStats((prev) => {
+                prev.overallCorrects += 1
+                prev.correctsInRow += 1
+                if (prev.correctsInRow > prev.mostCorrectsInRow) {
+                    prev.mostCorrectsInRow = prev.correctsInRow
+                }
+                return prev
+            })
             setTimeout(() => {
                 setCurrentQuestionIndex(() => currentQuestionIndex + 1)
                 clickedButton.classList.remove("correct")
@@ -239,19 +255,24 @@ const App = () => {
         } else {
             clickedButton.classList.add("wrong")
             allAnswersList.forEach(answer => {
-                if(answer.innerText === correct_answer)  {
+                if(answer.value === decodeHtml(correct_answer))  {
                     answer.classList.add("correct")
                 }
                 answer.disabled = true
-                setAnswerWasWrong(true)
-            })    
+            }) 
+            setStats((prev) => {
+                prev.overallWrongs += 1
+                prev.correctsInRow = 0
+                return prev
+            })
+            setAnswerWasWrong(true)
         }
     }
     
     function handleGoToNextQuestion() {
         setAnswerWasWrong(false)
         setCurrentQuestionIndex(() => currentQuestionIndex + 1)
-        const allAnswersList = Array.from(document.querySelector(".answers-container").childNodes)
+        const allAnswersList = Array.from(answerButtonsContainer.current.childNodes)
         allAnswersList.forEach(answer => {
             answer.classList.remove("correct")
             answer.classList.remove("wrong")
@@ -264,19 +285,38 @@ const App = () => {
 
     useEffect(() => {
         async function getQuestions() {
+            setIsLoading(true)
             try {
                 const response = await axios.get('https://opentdb.com/api.php?amount=10')
                 const multiAnswerQuestions = response.data.results.filter(item => item.type === "multiple") 
                 setQuestions(multiAnswerQuestions)
+                setIsLoading(false)
             } catch(err) {
-                    console.error(err)
+                console.error(err)
+                setIsLoading(false)
             }
         }
-        getQuestions()        
+        getQuestions()
         window.addEventListener("resize", () => setWindowWidth(window.innerWidth))
         return () => window.removeEventListener("resize", () => setWindowWidth(window.innerWidth))
     }, [])
-        
+
+
+    useEffect(() => {
+
+        function shuffle(array) {
+                for(let i = array.length - 1; i > 0; i--) {
+                    let j = Math.floor(Math.random() * (i + 1)) //random index from 0 to i
+                    // swap elements array[i] and array[j]
+                    let t = array[i];
+                    array[i] = array[j]; 
+                    array[j] = t
+                }
+                return array
+        }
+        setShuffledAnswers(shuffle(answers))    
+    
+    }, [currentQuestionIndex, questions])
     
 
     return (
@@ -285,26 +325,35 @@ const App = () => {
         
         <div className="content">
             <GreenWaveWithShapes breakpoint600={breakpoint600} breakpoint900={breakpoint900}/>
-            <div className="question-container">
-                <h1 className="question">{decodeHtml(question)}</h1>
-                <div className="answers-container">
-                    {answers.map(item => {
-                        return <Button onClick={handleUserAnswer} breakpoint900={breakpoint900} secondary>{decodeHtml(item)}</Button>
-                    })}
-                </div>
-                {answerWasWrong 
-                &&
-                    <div className="wrong-answer-advice-container">
-                        <p><span className="text-highlight">wrong answer</span>. You can learn more about this topic below. or click <span className="text-highlight">next</span> to move on to the next question.</p>
-                        <Button onClick={handleGoToNextQuestion} breakpoint900={breakpoint900} primary>next</Button>
-                    </div>
+                {isLoading 
+                ?  
+                    "Loading . . ." 
+                :
+                (!isLoading && (currentQuestionIndex + 1 > questions.length)) 
+                    ? "There are no more questions left Click this button for a new batch" 
+                    :
+                        <div className="question-container">  
+                            <h1 className="question">{decodeHtml(question)}</h1>
+                            <div ref={answerButtonsContainer} className="answers-container">
+                                {shuffledAnswers.map(item => {
+                                    return <Button onClick={handleUserAnswer} value={decodeHtml(item)} breakpoint900={breakpoint900} secondary>{decodeHtml(item)}</Button>
+                                })}
+                            </div>
+                            <p > {currentQuestionIndex + 1} / {questions.length}</p>              
+                            {answerWasWrong 
+                            &&
+                                <div className="wrong-answer-advice-container">
+                                    <p><span className="text-highlight">wrong answer</span>. You can see the resources we found below to further your knowledge. or click <span className="text-highlight">next</span> to move on to the next question.</p>
+                                    <Button onClick={handleGoToNextQuestion} breakpoint900={breakpoint900} primary>next</Button>
+                                </div>
+                            }
+                        </div>
                 }
-            </div>
             <hr />
             <div className="cards-container">
                 <LearningCard breakpoint900={breakpoint900}/>
             </div>
-            <Results breakpoint600={breakpoint600}/>
+            <Results breakpoint600={breakpoint600} stats={stats}/>
             <QuestionsControl breakpoint900={breakpoint900}/>
 
 
@@ -329,3 +378,15 @@ export default App
 
 
 // it might be better to store the questions in the local storage to reduce the api calls. but first see if it's actually an improvement.
+
+// sometimes when we answer wrong, it doesn't show the correct answer to us. i think it's fixed. i'll pay attention to it to be sure.
+
+// after answering, when window size changes the correct and wrong classes are removed from the answers. it's because the buttons will render again so the class that was added dynamically with js gets removed.(this is my guess for now)
+
+
+// add a feature showing how many questions we have and how many we've gone through |||| done
+// add a page for when the questions are over.
+// add a loading animation
+
+
+// for wikipedia searches we can search for text inside of "" to get better results. also searching for the correct answer might be a good idea as well
